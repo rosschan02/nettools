@@ -8,13 +8,16 @@
 // 跨平台差异：
 //   - macOS: traceroute -n -q 3 -w <sec> -m <hops> <host>
 //   - Linux: traceroute -n -q 3 -w <sec> -m <hops> <host>
-//   - Windows: tracert -d -h <hops> -w <ms> <host>（输出格式不同，TODO）
+//   - Windows: tracert -d -h <hops> -w <ms> <host>，spawn 加 CREATE_NO_WINDOW
+//
+// 输出编码：Unix 通常 UTF-8；中文 Windows tracert 是 GBK，需要逐行 raw bytes
+// 读出来再用 encoding_rs 解码，所以这里用 read_until(b'\n') 而不是 lines()。
 
 use serde::Serialize;
 use std::process::Stdio;
 use std::time::Instant;
 use tauri::Emitter;
-use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, BufReader};
 use tokio::process::Command;
 
 #[derive(Debug, Serialize, Clone)]
@@ -47,13 +50,24 @@ pub async fn traceroute_run(
         .map_err(|e| format!("启动 traceroute 失败: {}", e))?;
 
     let stdout = child.stdout.take().ok_or("无 stdout")?;
-    let mut lines = BufReader::new(stdout).lines();
+    let mut reader = BufReader::new(stdout);
+    let mut buf = Vec::new();
 
     let start = Instant::now();
     let mut hop_count = 0usize;
 
-    while let Some(line) = lines.next_line().await.map_err(|e| e.to_string())? {
-        if let Some(hop) = parse_line(&line) {
+    loop {
+        buf.clear();
+        let n = reader
+            .read_until(b'\n', &mut buf)
+            .await
+            .map_err(|e| e.to_string())?;
+        if n == 0 {
+            break;
+        }
+        let line = decode_bytes(&buf);
+        let trimmed = line.trim_end_matches(['\r', '\n']);
+        if let Some(hop) = parse_line(trimmed) {
             hop_count += 1;
             let _ = app.emit("trace-hop", &hop);
         }
@@ -65,8 +79,9 @@ pub async fn traceroute_run(
     let mut stderr_text = String::new();
     if !status.success() {
         if let Some(mut err) = stderr {
-            use tokio::io::AsyncReadExt;
-            let _ = err.read_to_string(&mut stderr_text).await;
+            let mut bytes = Vec::new();
+            let _ = err.read_to_end(&mut bytes).await;
+            stderr_text = decode_bytes(&bytes);
         }
     }
 
@@ -100,6 +115,7 @@ fn build_command(host: &str, max_hops: u8, timeout_ms: u64) -> Command {
             &timeout_ms.to_string(),
             host,
         ]);
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
         cmd
     }
     #[cfg(any(target_os = "macos", target_os = "linux"))]
@@ -118,6 +134,16 @@ fn build_command(host: &str, max_hops: u8, timeout_ms: u64) -> Command {
         ]);
         cmd
     }
+}
+
+/// 把子进程输出字节解码成字符串。UTF-8 优先，遇到非 UTF-8 字节回退 GBK
+/// （主要给中文 Windows tracert 用）。
+fn decode_bytes(bytes: &[u8]) -> String {
+    if let Ok(s) = std::str::from_utf8(bytes) {
+        return s.to_string();
+    }
+    let (decoded, _, _) = encoding_rs::GBK.decode(bytes);
+    decoded.into_owned()
 }
 
 #[cfg(any(target_os = "macos", target_os = "linux"))]
