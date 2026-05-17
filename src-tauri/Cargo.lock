@@ -2454,6 +2454,7 @@ dependencies = [
 name = "netools"
 version = "0.1.0"
 dependencies = [
+ "encoding_rs",
  "futures",
  "hickory-resolver",
  "rand 0.10.1",

@@ -74,8 +74,30 @@ pub async fn tcp_ping(
         // 用 TcpPingEvent 包一层把 seq 也传给前端，图表用 seq 做 X 轴
         let _ = app.emit(
             "tcp-ping-result",
-            &TcpPingEvent { seq: i, result: r.clone() },
+            &TcpPingEvent {
+                seq: i,
+                result: r.clone(),
+            },
         );
+        results.push(r);
+        if (i + 1) < count {
+            tokio::time::sleep(Duration::from_millis(interval_ms)).await;
+        }
+    }
+    results
+}
+
+pub async fn tcp_ping_cli(
+    host: String,
+    port: u16,
+    count: u16,
+    interval_ms: u64,
+    timeout_ms: u64,
+) -> Vec<TcpProbeResult> {
+    let timeout = Duration::from_millis(timeout_ms);
+    let mut results = Vec::with_capacity(count as usize);
+    for i in 0..count {
+        let r = connect::probe_one(host.clone(), port, timeout, false).await;
         results.push(r);
         if (i + 1) < count {
             tokio::time::sleep(Duration::from_millis(interval_ms)).await;

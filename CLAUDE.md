@@ -4,13 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A desktop network-diagnostics app built on **Tauri 2** with a **React 19 + TypeScript** frontend (Vite) and a **Rust** backend. Five tools: ping, tcp, dns, http, traceroute — each exposed as a Tauri command and rendered by a single panel.
+A network-diagnostics app built on **Tauri 2** with a **React 19 + TypeScript** frontend (Vite) and a **Rust** backend. Non-Linux builds use the desktop GUI. **Linux builds (including ARM Linux) are pure CLI** via `src-tauri/src/cli.rs`; they do not open the Tauri window. Five tools: ping, tcp, dns, http, traceroute — exposed as Tauri commands for GUI builds and CLI subcommands for Linux.
 
 ## Commands
 
 ```bash
-# Run the app (launches Vite on :1420, then the Tauri shell) — primary dev loop
+# Run the app on macOS/Windows (launches Vite on :1420, then the Tauri shell)
 npm run tauri dev
+
+# Linux / Linux ARM pure CLI build and help
+cd src-tauri && cargo build --release
+./target/release/netools --help
 
 # Type-check + Vite build (no Tauri shell)
 npm run build

@@ -1,6 +1,7 @@
 // 应用入口。`run()` 在 main.rs 中被调用。
 
-mod probe;
+pub mod cli;
+pub mod probe;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {

@@ -28,12 +28,22 @@ pub async fn ping_host(
     count: u16,
     timeout_ms: u64,
 ) -> Result<Vec<PingResult>, String> {
-    let backend = std::env::var("NETOOLS_PING_BACKEND")
-        .unwrap_or_else(|_| "subprocess".to_string());
+    let backend =
+        std::env::var("NETOOLS_PING_BACKEND").unwrap_or_else(|_| "subprocess".to_string());
     match backend.as_str() {
         "raw" => raw::ping_host(&app, host, count, timeout_ms).await,
         _ => subprocess::ping_host(&app, host, count, timeout_ms).await,
     }
+}
+
+/// 纯 CLI 使用的 ping：不依赖 Tauri AppHandle，也不 emit 前端事件。
+/// Linux 版本默认走 CLI，因此这里固定复用无需权限的 subprocess 后端。
+pub async fn ping_host_cli(
+    host: String,
+    count: u16,
+    timeout_ms: u64,
+) -> Result<Vec<PingResult>, String> {
+    subprocess::ping_host_no_emit(host, count, timeout_ms).await
 }
 
 /// 返回当前生效的 ping 后端，给前端显示用

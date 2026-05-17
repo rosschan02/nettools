@@ -41,6 +41,26 @@ pub async fn traceroute_run(
     max_hops: u8,
     timeout_ms: u64,
 ) -> Result<(), String> {
+    let start = Instant::now();
+    let hops = traceroute_collect(host, max_hops, timeout_ms).await?;
+    for hop in &hops {
+        let _ = app.emit("trace-hop", hop);
+    }
+    let _ = app.emit(
+        "trace-done",
+        TraceDone {
+            total_ms: start.elapsed().as_secs_f64() * 1000.0,
+            hop_count: hops.len(),
+        },
+    );
+    Ok(())
+}
+
+pub async fn traceroute_collect(
+    host: String,
+    max_hops: u8,
+    timeout_ms: u64,
+) -> Result<Vec<TraceHop>, String> {
     let mut cmd = build_command(&host, max_hops, timeout_ms);
 
     let mut child = cmd
@@ -52,9 +72,7 @@ pub async fn traceroute_run(
     let stdout = child.stdout.take().ok_or("无 stdout")?;
     let mut reader = BufReader::new(stdout);
     let mut buf = Vec::new();
-
-    let start = Instant::now();
-    let mut hop_count = 0usize;
+    let mut hops = Vec::new();
 
     loop {
         buf.clear();
@@ -68,8 +86,7 @@ pub async fn traceroute_run(
         let line = decode_bytes(&buf);
         let trimmed = line.trim_end_matches(['\r', '\n']);
         if let Some(hop) = parse_line(trimmed) {
-            hop_count += 1;
-            let _ = app.emit("trace-hop", &hop);
+            hops.push(hop);
         }
     }
 
@@ -85,22 +102,14 @@ pub async fn traceroute_run(
         }
     }
 
-    let _ = app.emit(
-        "trace-done",
-        TraceDone {
-            total_ms: start.elapsed().as_secs_f64() * 1000.0,
-            hop_count,
-        },
-    );
-
-    if !status.success() && hop_count == 0 {
+    if !status.success() && hops.is_empty() {
         return Err(format!(
             "traceroute 失败 (exit {:?}): {}",
             status.code(),
             stderr_text.trim()
         ));
     }
-    Ok(())
+    Ok(hops)
 }
 
 fn build_command(host: &str, max_hops: u8, timeout_ms: u64) -> Command {

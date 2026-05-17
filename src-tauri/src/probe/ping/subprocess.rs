@@ -30,6 +30,22 @@ pub async fn ping_host(
     Ok(results)
 }
 
+pub async fn ping_host_no_emit(
+    host: String,
+    count: u16,
+    timeout_ms: u64,
+) -> Result<Vec<PingResult>, String> {
+    let mut results = Vec::with_capacity(count as usize);
+    for i in 0..count {
+        let r = ping_once(&host, i, timeout_ms).await;
+        results.push(r);
+        if i + 1 < count {
+            tokio::time::sleep(Duration::from_millis(1000)).await;
+        }
+    }
+    Ok(results)
+}
+
 async fn ping_once(host: &str, seq: u16, timeout_ms: u64) -> PingResult {
     let mut cmd = Command::new("ping");
 
