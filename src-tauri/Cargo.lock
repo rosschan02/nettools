@@ -2452,11 +2452,12 @@ dependencies = [
 
 [[package]]
 name = "netools"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "encoding_rs",
  "futures",
  "hickory-resolver",
+ "network-interface",
  "rand 0.10.1",
  "reqwest",
  "serde",
@@ -2468,6 +2469,18 @@ dependencies = [
  "tokio",
  "url",
  "x509-parser",
+]
+
+[[package]]
+name = "network-interface"
+version = "2.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ddcb8865ad3d9950f22f42ffa0ef0aecbfbf191867b3122413602b0a360b2a6"
+dependencies = [
+ "cc",
+ "libc",
+ "thiserror 2.0.18",
+ "winapi",
 ]
 
 [[package]]
