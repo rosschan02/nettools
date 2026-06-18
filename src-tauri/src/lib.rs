@@ -9,6 +9,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         // 后续加新 probe（tcp/dns/http）就在这里追加。
         .invoke_handler(tauri::generate_handler![
+            probe::diagnostic::diagnose,
             probe::ping::ping_host,
             probe::ping::ping_backend,
             probe::tcp::tcp_probe,
@@ -16,6 +17,8 @@ pub fn run() {
             probe::tcp::tcp_ping,
             probe::dns::dns_query,
             probe::http::http_request,
+            probe::lan::lan_info,
+            probe::lan::lan_scan,
             probe::traceroute::traceroute_run,
         ])
         .run(tauri::generate_context!())

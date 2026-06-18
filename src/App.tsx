@@ -1,14 +1,18 @@
 import { useState } from "react";
+import DiagnosticPanel from "./panels/DiagnosticPanel";
 import PingPanel from "./panels/PingPanel";
 import TcpPanel from "./panels/TcpPanel";
 import DnsPanel from "./panels/DnsPanel";
 import HttpPanel from "./panels/HttpPanel";
+import LanPanel from "./panels/LanPanel";
 import TraceroutePanel from "./panels/TraceroutePanel";
 import "./App.css";
 
-type Tool = "ping" | "tcp" | "dns" | "http" | "traceroute";
+type Tool = "diagnostic" | "lan" | "ping" | "tcp" | "dns" | "http" | "traceroute";
 
 const TOOLS: { id: Tool; label: string; enabled: boolean }[] = [
+  { id: "diagnostic", label: "诊断报告", enabled: true },
+  { id: "lan", label: "局域网 IP", enabled: true },
   { id: "ping", label: "Ping", enabled: true },
   { id: "tcp", label: "TCP", enabled: true },
   { id: "dns", label: "DNS", enabled: true },
@@ -17,7 +21,7 @@ const TOOLS: { id: Tool; label: string; enabled: boolean }[] = [
 ];
 
 function App() {
-  const [tool, setTool] = useState<Tool>("ping");
+  const [tool, setTool] = useState<Tool>("diagnostic");
 
   return (
     <div className="app-shell">
@@ -43,6 +47,8 @@ function App() {
       </aside>
 
       <main className="panel">
+        {tool === "diagnostic" && <DiagnosticPanel />}
+        {tool === "lan" && <LanPanel />}
         {tool === "ping" && <PingPanel />}
         {tool === "tcp" && <TcpPanel />}
         {tool === "dns" && <DnsPanel />}

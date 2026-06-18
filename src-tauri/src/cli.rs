@@ -21,6 +21,21 @@ pub struct CliArgs {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CliCommand {
+    LanInfo,
+    LanScan {
+        cidr: Option<String>,
+        timeout_ms: u64,
+        concurrency: usize,
+        suggestion_count: usize,
+        suggest_only: bool,
+    },
+    Diagnose {
+        target: String,
+        include_trace: bool,
+        timeout_ms: u64,
+        max_hops: u8,
+        ping_count: u16,
+    },
     Ping {
         host: String,
         count: u16,
@@ -119,6 +134,10 @@ where
 
     let sub = tokens.remove(0);
     let command = match sub.as_str() {
+        "lan-info" => parse_lan_info(tokens)?,
+        "lan-scan" => parse_lan_scan(tokens, false)?,
+        "ip-suggest" => parse_lan_scan(tokens, true)?,
+        "diagnose" | "doctor" => parse_diagnose(tokens)?,
         "ping" => parse_ping(tokens)?,
         "tcp" => parse_tcp(tokens)?,
         "scan" => parse_scan(tokens)?,
@@ -136,6 +155,10 @@ pub fn usage() -> String {
     r#"netools - pure CLI network diagnostics
 
 USAGE:
+  netools lan-info [--json]
+  netools lan-scan [cidr] [--timeout MS] [--concurrency N] [--count N] [--json]
+  netools ip-suggest [cidr] [--timeout MS] [--concurrency N] [--count N] [--json]
+  netools diagnose <host-or-url> [--no-trace] [--count N] [--max-hops N] [--timeout MS] [--json]
   netools ping <host> [--count N] [--timeout MS] [--json]
   netools tcp <host> <port> [--timeout MS] [--fingerprint] [--json]
   netools scan <host> <ports> [--timeout MS] [--concurrency N] [--fingerprint] [--json]
@@ -148,6 +171,40 @@ PORTS:
   scan accepts comma/range syntax, e.g. 22,80,443,8000-8010
 "#
     .to_string()
+}
+
+fn parse_lan_info(tokens: Vec<String>) -> Result<CliCommand, String> {
+    if tokens.is_empty() {
+        Ok(CliCommand::LanInfo)
+    } else {
+        Err("lan-info 不接受位置参数".to_string())
+    }
+}
+
+fn parse_lan_scan(tokens: Vec<String>, suggest_only: bool) -> Result<CliCommand, String> {
+    let (pos, opts) = split_options(tokens);
+    if pos.len() > 1 {
+        return Err("用法: lan-scan [cidr]".to_string());
+    }
+    Ok(CliCommand::LanScan {
+        cidr: pos.first().cloned(),
+        timeout_ms: opt_u64(&opts, "--timeout", 700)?,
+        concurrency: opt_usize(&opts, "--concurrency", 32)?,
+        suggestion_count: opt_usize(&opts, "--count", 10)?,
+        suggest_only,
+    })
+}
+
+fn parse_diagnose(tokens: Vec<String>) -> Result<CliCommand, String> {
+    let (pos, opts) = split_options(tokens);
+    let target = one_pos(&pos, "diagnose <host-or-url>")?;
+    Ok(CliCommand::Diagnose {
+        target,
+        include_trace: !has_flag(&opts, "--no-trace"),
+        timeout_ms: opt_u64(&opts, "--timeout", 2000)?,
+        max_hops: opt_u8(&opts, "--max-hops", 20)?,
+        ping_count: opt_u16(&opts, "--count", 4)?,
+    })
 }
 
 fn parse_ping(tokens: Vec<String>) -> Result<CliCommand, String> {
@@ -247,6 +304,38 @@ fn run(args: CliArgs) -> Result<(), String> {
 
     rt.block_on(async move {
         match args.command {
+            CliCommand::LanInfo => {
+                let r = probe::lan::lan_info().await?;
+                print_output(&args.format, &r, format_lan_info(&r))
+            }
+            CliCommand::LanScan {
+                cidr,
+                timeout_ms,
+                concurrency,
+                suggestion_count,
+                suggest_only,
+            } => {
+                let r =
+                    probe::lan::lan_scan(cidr, timeout_ms, concurrency, suggestion_count).await?;
+                print_output(&args.format, &r, format_lan_scan(&r, suggest_only))
+            }
+            CliCommand::Diagnose {
+                target,
+                include_trace,
+                timeout_ms,
+                max_hops,
+                ping_count,
+            } => {
+                let r = probe::diagnostic::diagnose(
+                    target,
+                    include_trace,
+                    timeout_ms,
+                    max_hops,
+                    ping_count,
+                )
+                .await?;
+                print_output(&args.format, &r, format_diagnostic(&r))
+            }
             CliCommand::Ping {
                 host,
                 count,
@@ -359,6 +448,151 @@ fn format_ping(rows: &[probe::ping::PingResult]) -> String {
         }
     }
     out.trim_end().to_string()
+}
+
+fn format_lan_info(info: &probe::lan::LanInfo) -> String {
+    format!(
+        "interface: {}\naddress: {}\nnetmask: {} (/{})\nsubnet: {}\nsuggested_scan: {}\nbroadcast: {}\ngateway: {}\nmac: {}",
+        info.interface_name,
+        info.address,
+        info.netmask,
+        info.prefix,
+        info.cidr,
+        info.suggested_cidr,
+        info.broadcast,
+        info.gateway.as_deref().unwrap_or("unknown"),
+        info.mac.as_deref().unwrap_or("unknown"),
+    )
+}
+
+fn format_lan_scan(report: &probe::lan::LanScanReport, suggest_only: bool) -> String {
+    let mut out = String::new();
+    if !suggest_only {
+        let _ = writeln!(
+            out,
+            "scan {} via {} ({} hosts, {} active, {:.0}ms)",
+            report.cidr,
+            report.info.interface_name,
+            report.scanned_hosts,
+            report.active_hosts.len(),
+            report.duration_ms,
+        );
+        for host in &report.active_hosts {
+            let _ = writeln!(
+                out,
+                "{:<15} {:<17} via={}{}{}",
+                host.ip,
+                host.mac.as_deref().unwrap_or("-"),
+                host.methods.join(","),
+                if host.open_ports.is_empty() {
+                    String::new()
+                } else {
+                    format!(" ports={:?}", host.open_ports)
+                },
+                host.reserved_reason
+                    .as_ref()
+                    .map(|reason| format!(" [{reason}]"))
+                    .unwrap_or_default(),
+            );
+        }
+        let _ = writeln!(out);
+    }
+    let _ = writeln!(out, "疑似空闲候选:");
+    for ip in &report.candidates {
+        let _ = writeln!(out, "  {ip}");
+    }
+    let _ = write!(out, "\nwarning: {}", report.warning);
+    out
+}
+
+fn format_diagnostic(report: &probe::diagnostic::DiagnosticReport) -> String {
+    let mut out = format!(
+        "diagnostic report for {} ({}:{})\noverall: {} | passed={} warnings={} failed={} skipped={} | {:.0}ms",
+        report.host,
+        report.host,
+        report.port,
+        diagnostic_status(report.summary.status),
+        report.summary.passed,
+        report.summary.warnings,
+        report.summary.failed,
+        report.summary.skipped,
+        report.total_ms,
+    );
+
+    let ping_detail = report
+        .ping
+        .data
+        .as_ref()
+        .map(|rows| {
+            format!(
+                "{}/{} replies",
+                rows.iter().filter(|r| r.success).count(),
+                rows.len()
+            )
+        })
+        .unwrap_or_else(|| report.ping.error.clone().unwrap_or_default());
+    let dns_detail = report
+        .dns
+        .data
+        .as_ref()
+        .map(|rows| {
+            format!(
+                "{}/{} resolvers",
+                rows.iter().filter(|r| r.success).count(),
+                rows.len()
+            )
+        })
+        .unwrap_or_else(|| report.dns.error.clone().unwrap_or_default());
+    let tcp_detail = report
+        .tcp
+        .data
+        .as_ref()
+        .map(|result| if result.success { "open" } else { "closed" }.to_string())
+        .unwrap_or_else(|| report.tcp.error.clone().unwrap_or_default());
+    let http_detail = report
+        .http
+        .data
+        .as_ref()
+        .map(|result| format!("HTTP {} {:.0}ms", result.status, result.total_ms))
+        .unwrap_or_else(|| report.http.error.clone().unwrap_or_default());
+    let trace_detail = report
+        .traceroute
+        .data
+        .as_ref()
+        .map(|rows| format!("{} hops", rows.len()))
+        .unwrap_or_else(|| {
+            report
+                .traceroute
+                .error
+                .clone()
+                .unwrap_or_else(|| "disabled".to_string())
+        });
+
+    for (name, status, detail) in [
+        ("ping", report.ping.status, ping_detail),
+        ("dns", report.dns.status, dns_detail),
+        ("tcp", report.tcp.status, tcp_detail),
+        ("http/tls", report.http.status, http_detail),
+        ("traceroute", report.traceroute.status, trace_detail),
+    ] {
+        let _ = write!(
+            out,
+            "\n{:<10} {:<7} {}",
+            name,
+            diagnostic_status(status),
+            detail
+        );
+    }
+    out
+}
+
+fn diagnostic_status(status: probe::diagnostic::DiagnosticStatus) -> &'static str {
+    match status {
+        probe::diagnostic::DiagnosticStatus::Passed => "passed",
+        probe::diagnostic::DiagnosticStatus::Warning => "warning",
+        probe::diagnostic::DiagnosticStatus::Failed => "failed",
+        probe::diagnostic::DiagnosticStatus::Skipped => "skipped",
+    }
 }
 
 fn format_tcp_probe(r: &probe::tcp::TcpProbeResult) -> String {

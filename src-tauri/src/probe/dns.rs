@@ -70,11 +70,12 @@ async fn query_one(
     };
 
     let start = Instant::now();
-    let result = resolver.lookup(domain, record_type).await;
+    // resolver 内部可能依次尝试 UDP/TCP，外层 timeout 保证用户设置的是整次查询上限。
+    let result = tokio::time::timeout(timeout, resolver.lookup(domain, record_type)).await;
     let rtt_ms = start.elapsed().as_secs_f64() * 1000.0;
 
     match result {
-        Ok(lookup) => {
+        Ok(Ok(lookup)) => {
             let records: Vec<String> = lookup
                 .answers()
                 .iter()
@@ -89,12 +90,19 @@ async fn query_one(
                 records,
             }
         }
-        Err(e) => DnsServerResult {
+        Ok(Err(e)) => DnsServerResult {
             server: server.to_string(),
             rtt_ms,
             success: false,
             records: vec![],
             error: Some(e.to_string()),
+        },
+        Err(_) => DnsServerResult {
+            server: server.to_string(),
+            rtt_ms,
+            success: false,
+            records: vec![],
+            error: Some(format!("查询超时（{} ms）", timeout.as_millis())),
         },
     }
 }
