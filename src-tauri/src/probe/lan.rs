@@ -389,7 +389,10 @@ async fn default_route() -> RouteHint {
 
 #[cfg(target_os = "windows")]
 async fn default_route() -> RouteHint {
-    let output = Command::new("route").args(["print", "-4"]).output().await;
+    let output = windows_hidden_command("route")
+        .args(["print", "-4"])
+        .output()
+        .await;
     let Ok(output) = output else {
         return RouteHint::default();
     };
@@ -437,7 +440,7 @@ async fn read_neighbors() -> HashMap<Ipv4Addr, String> {
     #[cfg(target_os = "macos")]
     let output = Command::new("arp").arg("-an").output().await;
     #[cfg(target_os = "windows")]
-    let output = Command::new("arp").arg("-a").output().await;
+    let output = windows_hidden_command("arp").arg("-a").output().await;
     #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
     let output: Result<std::process::Output, std::io::Error> = Err(std::io::Error::new(
         std::io::ErrorKind::Unsupported,
@@ -448,6 +451,14 @@ async fn read_neighbors() -> HashMap<Ipv4Addr, String> {
         .ok()
         .map(|value| parse_neighbor_table(&String::from_utf8_lossy(&value.stdout)))
         .unwrap_or_default()
+}
+
+/// Windows GUI 构建调用控制台程序时必须禁止创建窗口，否则每次刷新网卡或扫描都会闪黑框。
+#[cfg(target_os = "windows")]
+fn windows_hidden_command(program: &str) -> Command {
+    let mut command = Command::new(program);
+    command.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    command
 }
 
 fn parse_neighbor_table(text: &str) -> HashMap<Ipv4Addr, String> {
