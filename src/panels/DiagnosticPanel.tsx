@@ -1,5 +1,7 @@
 import { ReactNode, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import AddressInput from "../components/AddressInput";
+import { useAddressHistory } from "../utils/history";
 
 type DiagnosticStatus = "passed" | "warning" | "failed" | "skipped";
 
@@ -204,8 +206,10 @@ export default function DiagnosticPanel() {
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copyLabel, setCopyLabel] = useState("复制 Markdown");
+  const targetHistory = useAddressHistory("diagnostic.target");
 
   async function run() {
+    targetHistory.add(target);
     setRunning(true);
     setError(null);
     setReport(null);
@@ -283,12 +287,15 @@ export default function DiagnosticPanel() {
         }}
       >
         <div className="diagnostic-target-row">
-          <input
+          <AddressInput
             value={target}
-            onChange={(event) => setTarget(event.currentTarget.value)}
+            onChange={setTarget}
+            history={targetHistory}
             placeholder="域名或 URL，例如 github.com"
-            aria-label="诊断目标"
+            ariaLabel="诊断目标"
             required
+            containerStyle={{ flex: 1, minWidth: 220 }}
+            style={{ padding: "9px 12px", background: "#171b1f" }}
           />
           <button type="submit" disabled={running}>
             {running ? "并行诊断中…" : "开始诊断"}

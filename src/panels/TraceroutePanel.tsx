@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
+import AddressInput from "../components/AddressInput";
+import { useAddressHistory } from "../utils/history";
 
 type TraceHop = {
   ttl: number;
@@ -33,6 +35,7 @@ export default function TraceroutePanel() {
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [totalMs, setTotalMs] = useState<number | null>(null);
+  const hostHistory = useAddressHistory("traceroute.host");
 
   // 用 ref 保存 unlisten 函数，组件卸载时一次性清理
   const unlistenRefs = useRef<UnlistenFn[]>([]);
@@ -55,6 +58,7 @@ export default function TraceroutePanel() {
   }, []);
 
   async function run() {
+    hostHistory.add(host);
     setRunning(true);
     setError(null);
     setHops([]);
@@ -86,11 +90,12 @@ export default function TraceroutePanel() {
           run();
         }}
       >
-        <input
+        <AddressInput
           value={host}
-          onChange={(e) => setHost(e.currentTarget.value)}
+          onChange={setHost}
+          history={hostHistory}
           placeholder="host or IP"
-          style={{ flex: 1, minWidth: 240 }}
+          containerStyle={{ flex: 1, minWidth: 240 }}
         />
         <label>最大跳数</label>
         <input

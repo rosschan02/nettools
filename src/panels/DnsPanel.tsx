@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import AddressInput from "../components/AddressInput";
+import { useAddressHistory } from "../utils/history";
 
 type DnsServerResult = {
   server: string;
@@ -29,6 +31,7 @@ export default function DnsPanel() {
   );
   const [customServer, setCustomServer] = useState("");
   const [timeoutMs, setTimeoutMs] = useState(2000);
+  const domainHistory = useAddressHistory("dns.domain");
 
   const [results, setResults] = useState<DnsServerResult[]>([]);
   const [running, setRunning] = useState(false);
@@ -42,6 +45,7 @@ export default function DnsPanel() {
   }
 
   async function run() {
+    domainHistory.add(domain);
     setRunning(true);
     setError(null);
     setResults([]);
@@ -84,11 +88,12 @@ export default function DnsPanel() {
           run();
         }}
       >
-        <input
+        <AddressInput
           value={domain}
-          onChange={(e) => setDomain(e.currentTarget.value)}
+          onChange={setDomain}
+          history={domainHistory}
           placeholder="domain (e.g. github.com)"
-          style={{ flex: 1, minWidth: 220 }}
+          containerStyle={{ flex: 1, minWidth: 220 }}
         />
         <label>类型</label>
         <select

@@ -201,6 +201,87 @@ code {
   font-size: 12px;
 }
 
+/* 地址历史下拉 */
+.address-field {
+  position: relative;
+  display: inline-flex;
+}
+
+.address-history {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  max-height: 280px;
+  overflow-y: auto;
+  background: #232323;
+  border: 1px solid #3a3a3a;
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  padding: 4px;
+}
+
+.address-history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #ddd;
+  font-size: 13px;
+}
+
+.address-history-item.active {
+  background: #1a3a5c;
+  color: #fff;
+}
+
+.address-history-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+}
+
+.address-history-remove {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  line-height: 1;
+  font-size: 14px;
+  color: #999;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+}
+
+.address-history-remove:hover:not(:disabled) {
+  background: #5c2828;
+  color: #fff;
+}
+
+.address-history-clear {
+  width: 100%;
+  margin-top: 4px;
+  padding: 5px 8px;
+  color: #9aa7b4;
+  background: transparent;
+  border: 0;
+  border-top: 1px solid #333;
+  border-radius: 0;
+  font-size: 12px;
+  text-align: center;
+}
+
+.address-history-clear:hover:not(:disabled) {
+  background: #2c2c2c;
+  color: #fff;
+}
+
 .diagnostic-heading {
   display: flex;
   align-items: flex-start;

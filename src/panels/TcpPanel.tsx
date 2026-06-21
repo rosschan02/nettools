@@ -3,6 +3,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import { parsePorts } from "../utils/ports";
 import LatencyChart, { LatencyPoint } from "../components/LatencyChart";
+import AddressInput from "../components/AddressInput";
+import { useAddressHistory } from "../utils/history";
 
 type TcpProbeResult = {
   host: string;
@@ -26,6 +28,7 @@ export default function TcpPanel() {
   const [timeoutMs, setTimeoutMs] = useState(1500);
   const [concurrency, setConcurrency] = useState(50);
   const [fingerprint, setFingerprint] = useState(true);
+  const hostHistory = useAddressHistory("tcp.host");
 
   const [results, setResults] = useState<TcpProbeResult[]>([]);
   const [running, setRunning] = useState(false);
@@ -57,6 +60,7 @@ export default function TcpPanel() {
   }, []);
 
   async function run() {
+    hostHistory.add(host);
     setRunning(true);
     setError(null);
     setResults([]);
@@ -139,11 +143,12 @@ export default function TcpPanel() {
           run();
         }}
       >
-        <input
+        <AddressInput
           value={host}
-          onChange={(e) => setHost(e.currentTarget.value)}
+          onChange={setHost}
+          history={hostHistory}
           placeholder="host or IP"
-          style={{ flex: 1, minWidth: 200 }}
+          containerStyle={{ flex: 1, minWidth: 200 }}
         />
 
         {mode === "single" || mode === "tcp-ping" ? (

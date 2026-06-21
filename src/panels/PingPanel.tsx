@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import LatencyChart, { LatencyPoint } from "../components/LatencyChart";
+import AddressInput from "../components/AddressInput";
+import { useAddressHistory } from "../utils/history";
 
 type PingResult = {
   seq: number;
@@ -18,6 +20,7 @@ export default function PingPanel() {
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [backend, setBackend] = useState<string>("…");
+  const hostHistory = useAddressHistory("ping.host");
 
   const unlistenRef = useRef<UnlistenFn | null>(null);
 
@@ -42,6 +45,7 @@ export default function PingPanel() {
   }, []);
 
   async function run() {
+    hostHistory.add(host);
     setRunning(true);
     setError(null);
     setResults([]);
@@ -89,11 +93,12 @@ export default function PingPanel() {
           run();
         }}
       >
-        <input
+        <AddressInput
           value={host}
-          onChange={(e) => setHost(e.currentTarget.value)}
+          onChange={setHost}
+          history={hostHistory}
           placeholder="host or IP"
-          style={{ flex: 1, minWidth: 220 }}
+          containerStyle={{ flex: 1, minWidth: 220 }}
         />
         <label>count</label>
         <input

@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import AddressInput from "../components/AddressInput";
+import { useAddressHistory } from "../utils/history";
 
 type TlsCertInfo = {
   subject: string;
@@ -52,6 +54,7 @@ export default function HttpPanel() {
   const [body, setBody] = useState("");
   const [followRedirects, setFollowRedirects] = useState(true);
   const [timeoutMs, setTimeoutMs] = useState(10000);
+  const urlHistory = useAddressHistory("http.url");
 
   const [showHeaders, setShowHeaders] = useState(false);
   const [showBodyEditor, setShowBodyEditor] = useState(false);
@@ -74,6 +77,7 @@ export default function HttpPanel() {
   }
 
   async function run() {
+    urlHistory.add(url);
     setRunning(true);
     setError(null);
     setResult(null);
@@ -121,11 +125,12 @@ export default function HttpPanel() {
             </option>
           ))}
         </select>
-        <input
+        <AddressInput
           value={url}
-          onChange={(e) => setUrl(e.currentTarget.value)}
+          onChange={setUrl}
+          history={urlHistory}
           placeholder="https://example.com/path"
-          style={{ flex: 1, minWidth: 300 }}
+          containerStyle={{ flex: 1, minWidth: 300 }}
         />
         <button type="submit" disabled={running}>
           {running ? "请求中…" : "发送"}
