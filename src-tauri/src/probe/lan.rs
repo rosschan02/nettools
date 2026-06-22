@@ -71,7 +71,7 @@ pub struct LanScanReport {
 
 #[tauri::command]
 pub async fn lan_info() -> Result<LanInfo, String> {
-    discover_lan_info().await
+    discover_lan_info(None).await
 }
 
 #[tauri::command]
@@ -80,9 +80,10 @@ pub async fn lan_scan(
     timeout_ms: u64,
     concurrency: usize,
     suggestion_count: usize,
+    interface_address: Option<String>,
 ) -> Result<LanScanReport, String> {
     let start = Instant::now();
-    let info = discover_lan_info().await?;
+    let info = discover_lan_info(interface_address.as_deref()).await?;
     let local_network = Ipv4Network::parse(&info.cidr)?;
     let requested = cidr
         .as_deref()
@@ -217,7 +218,7 @@ pub async fn lan_scan(
     })
 }
 
-async fn discover_lan_info() -> Result<LanInfo, String> {
+async fn discover_lan_info(interface_address: Option<&str>) -> Result<LanInfo, String> {
     let route = default_route().await;
     let system_interfaces =
         NetworkInterface::show().map_err(|error| format!("读取网络接口失败: {error}"))?;
@@ -256,18 +257,28 @@ async fn discover_lan_info() -> Result<LanInfo, String> {
     }
     interfaces.sort_by_key(|interface| !is_private_ipv4(&interface.address));
 
-    let selected_index = route
-        .interface
-        .as_deref()
-        .and_then(|name| interfaces.iter().position(|item| item.name == name))
-        .or_else(|| {
-            route.local_ip.and_then(|ip| {
-                interfaces
-                    .iter()
-                    .position(|item| item.address == ip.to_string())
+    let selected_index = if let Some(address) = interface_address
+        .map(str::trim)
+        .filter(|address| !address.is_empty())
+    {
+        interfaces
+            .iter()
+            .position(|item| item.address == address)
+            .ok_or_else(|| format!("所选网络接口 {address} 已不可用，请重新打开此页面后重试"))?
+    } else {
+        route
+            .interface
+            .as_deref()
+            .and_then(|name| interfaces.iter().position(|item| item.name == name))
+            .or_else(|| {
+                route.local_ip.and_then(|ip| {
+                    interfaces
+                        .iter()
+                        .position(|item| item.address == ip.to_string())
+                })
             })
-        })
-        .unwrap_or(0);
+            .unwrap_or(0)
+    };
     let selected = interfaces[selected_index].clone();
     let suggested_cidr = if selected.prefix < 22 {
         Ipv4Network::from_ip(selected.address.parse().unwrap(), 24).to_string()

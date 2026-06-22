@@ -315,8 +315,8 @@ fn run(args: CliArgs) -> Result<(), String> {
                 suggestion_count,
                 suggest_only,
             } => {
-                let r =
-                    probe::lan::lan_scan(cidr, timeout_ms, concurrency, suggestion_count).await?;
+                let r = probe::lan::lan_scan(cidr, timeout_ms, concurrency, suggestion_count, None)
+                    .await?;
                 print_output(&args.format, &r, format_lan_scan(&r, suggest_only))
             }
             CliCommand::Diagnose {

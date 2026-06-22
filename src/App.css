@@ -604,41 +604,6 @@ code {
   color: #f3d873;
 }
 
-.lan-info-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(150px, 1fr));
-  gap: 1px;
-  overflow: hidden;
-  margin-bottom: 14px;
-  background: #343a40;
-  border: 1px solid #343a40;
-  border-radius: 9px;
-}
-
-.lan-info-item {
-  min-width: 0;
-  padding: 10px 12px;
-  background: #202326;
-}
-
-.lan-info-item span {
-  display: block;
-  margin-bottom: 3px;
-  color: #77838e;
-  font-size: 11px;
-}
-
-.lan-info-item strong {
-  display: block;
-  overflow: hidden;
-  color: #e4ebf2;
-  font-family: ui-monospace, SFMono-Regular, monospace;
-  font-size: 12px;
-  font-weight: 500;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .lan-scan-form {
   padding: 15px;
   margin-bottom: 14px;
@@ -662,11 +627,16 @@ code {
   font-size: 12px;
 }
 
-.lan-primary-controls input {
+.lan-primary-controls input,
+.lan-primary-controls select {
   width: 100%;
   padding: 8px 10px;
   background: #171b1f;
   font-family: ui-monospace, SFMono-Regular, monospace;
+}
+
+.lan-primary-controls .lan-interface-control {
+  flex: 0 1 250px;
 }
 
 .lan-primary-controls button {
@@ -893,7 +863,7 @@ code {
 
 @media (max-width: 800px) {
   .lan-heading { flex-direction: column; }
-  .lan-info-grid { grid-template-columns: repeat(2, minmax(130px, 1fr)); }
   .lan-primary-controls { align-items: stretch; flex-direction: column; }
+  .lan-primary-controls .lan-interface-control { flex-basis: auto; }
   .lan-result-summary { grid-template-columns: repeat(2, 1fr); }
 }

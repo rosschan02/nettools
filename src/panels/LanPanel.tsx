@@ -59,13 +59,10 @@ function formatDuration(value: number): string {
   return value >= 1000 ? `${(value / 1000).toFixed(1)} 秒` : `${value.toFixed(0)} ms`;
 }
 
-function InfoItem({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="lan-info-item">
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
+function suggestedCidr(networkInterface: LanInterface): string {
+  if (networkInterface.prefix >= 22) return networkInterface.cidr;
+  const octets = networkInterface.address.split(".");
+  return `${octets[0]}.${octets[1]}.${octets[2]}.0/24`;
 }
 
 function MethodBadge({ method }: { method: string }) {
@@ -74,6 +71,7 @@ function MethodBadge({ method }: { method: string }) {
 
 export default function LanPanel() {
   const [info, setInfo] = useState<LanInfo | null>(null);
+  const [interfaceAddress, setInterfaceAddress] = useState("");
   const [cidr, setCidr] = useState("");
   const [timeoutMs, setTimeoutMs] = useState(700);
   const [concurrency, setConcurrency] = useState(32);
@@ -90,6 +88,7 @@ export default function LanPanel() {
       .then((result) => {
         if (!mounted) return;
         setInfo(result);
+        setInterfaceAddress(result.address);
         setCidr(result.suggested_cidr);
       })
       .catch((caught) => {
@@ -103,19 +102,14 @@ export default function LanPanel() {
     };
   }, []);
 
-  async function refreshInfo() {
-    setLoadingInfo(true);
+  function selectInterface(address: string) {
+    const selected = info?.interfaces.find((item) => item.address === address);
+    if (!selected) return;
+    setInterfaceAddress(address);
+    setCidr(suggestedCidr(selected));
+    setReport(null);
     setError(null);
-    try {
-      const result = await invoke<LanInfo>("lan_info");
-      setInfo(result);
-      setCidr(result.suggested_cidr);
-      setReport(null);
-    } catch (caught) {
-      setError(String(caught));
-    } finally {
-      setLoadingInfo(false);
-    }
+    setCopiedIp(null);
   }
 
   async function runScan() {
@@ -129,6 +123,7 @@ export default function LanPanel() {
         timeoutMs,
         concurrency,
         suggestionCount,
+        interfaceAddress,
       });
       setReport(result);
       setInfo(result.info);
@@ -153,33 +148,14 @@ export default function LanPanel() {
       <div className="lan-heading">
         <div>
           <h2>局域网 IP 助手</h2>
-          <p className="subtitle">识别当前子网 · 查找在线设备 · 推荐疑似空闲地址</p>
+          <p className="subtitle">查找在线设备 · 推荐疑似空闲地址</p>
         </div>
-        <button
-          type="button"
-          className="secondary-button"
-          onClick={() => void refreshInfo()}
-          disabled={loadingInfo || running}
-        >
-          {loadingInfo ? "识别中…" : "重新识别网卡"}
-        </button>
       </div>
 
       <div className="lan-safety-note">
         <strong>使用边界</strong>
         <span>仅扫描你有权管理的本地网络。无响应不代表永久空闲，正式分配前仍需核对 DHCP 租约和保留范围。</span>
       </div>
-
-      {info ? (
-        <section className="lan-info-grid" aria-label="当前网络信息">
-          <InfoItem label="网络接口" value={info.interface_name} />
-          <InfoItem label="本机地址" value={info.address} />
-          <InfoItem label="默认网关" value={info.gateway ?? "未识别"} />
-          <InfoItem label="实际子网" value={info.cidr} />
-          <InfoItem label="扫描建议" value={info.suggested_cidr} />
-          <InfoItem label="本机 MAC" value={info.mac ?? "未识别"} />
-        </section>
-      ) : null}
 
       <form
         className="lan-scan-form"
@@ -189,6 +165,22 @@ export default function LanPanel() {
         }}
       >
         <div className="lan-primary-controls">
+          {info && info.interfaces.length > 1 ? (
+            <label className="lan-interface-control">
+              网络接口
+              <select
+                value={interfaceAddress}
+                onChange={(event) => selectInterface(event.currentTarget.value)}
+                disabled={running}
+              >
+                {info.interfaces.map((item) => (
+                  <option value={item.address} key={`${item.name}-${item.address}`}>
+                    {item.name} ({item.address})
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           <label>
             扫描范围
             <input
@@ -199,8 +191,8 @@ export default function LanPanel() {
               disabled={!info || running}
             />
           </label>
-          <button type="submit" disabled={!info || running || loadingInfo}>
-            {running ? "正在扫描…" : "扫描并推荐 IP"}
+          <button type="submit" disabled={!info || !interfaceAddress || running || loadingInfo}>
+            {loadingInfo ? "正在读取网络…" : running ? "正在扫描…" : "扫描并推荐 IP"}
           </button>
         </div>
         <div className="lan-scan-options">
